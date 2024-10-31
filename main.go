@@ -4,113 +4,57 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
-	pwl "github.com/justjanne/powerline-go/powerline"
+	"github.com/thefynx/powerline-go/internal/constants"
+	"github.com/thefynx/powerline-go/internal/core"
+	"github.com/thefynx/powerline-go/internal/helpers"
+	"github.com/thefynx/powerline-go/internal/segments"
+	"github.com/thefynx/powerline-go/internal/types"
 )
 
-type alignment int
-
-const (
-	alignLeft alignment = iota
-	alignRight
-)
-
-const (
-	// MinUnsignedInteger minimum unsigned integer
-	MinUnsignedInteger uint = 0
-	// MaxUnsignedInteger maximum unsigned integer
-	MaxUnsignedInteger = ^MinUnsignedInteger
-	// MaxInteger maximum integer
-	MaxInteger = int(MaxUnsignedInteger >> 1)
-	/* MinInteger minimum integer
-	MinInteger = ^MaxInteger
-	*/
-)
-
-func warn(msg string) {
-	if *args.IgnoreWarnings {
-		return
-	}
-
-	print("[powerline-go]", msg)
-}
-
-func pathExists(path string) bool {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-func getValidCwd() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		var exists bool
-		cwd, exists = os.LookupEnv("PWD")
-		if !exists {
-			warn("Your current directory is invalid.")
-			print("> ")
-			os.Exit(1)
-		}
-	}
-
-	parts := strings.Split(cwd, string(os.PathSeparator))
-	up := cwd
-
-	for len(parts) > 0 && !pathExists(up) {
-		parts = parts[:len(parts)-1]
-		up = strings.Join(parts, string(os.PathSeparator))
-	}
-	if cwd != up {
-		warn("Your current directory is invalid. Lowest valid directory: " + up)
-	}
-	return cwd
-}
-
-var modules = map[string]func(*powerline) []pwl.Segment{
-	"aws":                 segmentAWS,
-	"bzr":                 segmentBzr,
-	"cwd":                 segmentCwd,
-	"direnv":              segmentDirenv,
-	"docker":              segmentDocker,
-	"docker-context":      segmentDockerContext,
-	"dotenv":              segmentDotEnv,
-	"duration":            segmentDuration,
-	"exit":                segmentExitCode,
-	"fossil":              segmentFossil,
-	"gcp":                 segmentGCP,
-	"git":                 segmentGit,
-	"gitlite":             segmentGitLite,
-	"goenv":               segmentGoenv,
-	"hg":                  segmentHg,
-	"svn":                 segmentSubversion,
-	"host":                segmentHost,
-	"jobs":                segmentJobs,
-	"kube":                segmentKube,
-	"load":                segmentLoad,
-	"newline":             segmentNewline,
-	"perlbrew":            segmentPerlbrew,
-	"plenv":               segmentPlEnv,
-	"perms":               segmentPerms,
-	"rbenv":               segmentRbenv,
-	"root":                segmentRoot,
-	"rvm":                 segmentRvm,
-	"shell-var":           segmentShellVar,
-	"shenv":               segmentShEnv,
-	"ssh":                 segmentSSH,
-	"termtitle":           segmentTermTitle,
-	"terraform-workspace": segmentTerraformWorkspace,
-	"time":                segmentTime,
-	"node":                segmentNode,
-	"user":                segmentUser,
-	"venv":                segmentVirtualEnv,
-	"vgo":                 segmentVirtualGo,
-	"vi-mode":             segmentViMode,
-	"wsl":                 segmentWSL,
-	"nix-shell":           segmentNixShell,
+var modules = map[string]func(*types.Powerline) []types.Segment{
+	"aws":                 segments.AWS,
+	"bzr":                 segments.Bzr,
+	"cwd":                 segments.Cwd,
+	"direnv":              segments.Direnv,
+	"docker":              segments.Docker,
+	"docker-context":      segments.DockerContext,
+	"dotenv":              segments.DotEnv,
+	"duration":            segments.Duration,
+	"exit":                segments.ExitCode,
+	"fossil":              segments.Fossil,
+	"gcp":                 segments.GCP,
+	"git":                 segments.Git,
+	"gitlite":             segments.GitLite,
+	"goenv":               segments.Goenv,
+	"hg":                  segments.Hg,
+	"svn":                 segments.Subversion,
+	"host":                segments.Host,
+	"jobs":                segments.Jobs,
+	"kube":                segments.Kube,
+	"load":                segments.Load,
+	"newline":             segments.Newline,
+	"perlbrew":            segments.Perlbrew,
+	"plenv":               segments.PlEnv,
+	"perms":               segments.Perms,
+	"rbenv":               segments.Rbenv,
+	"root":                segments.Root,
+	"rvm":                 segments.Rvm,
+	"shell-var":           segments.ShellVar,
+	"shenv":               segments.ShEnv,
+	"ssh":                 segments.SSH,
+	"termtitle":           segments.TermTitle,
+	"terraform-workspace": segments.TerraformWorkspace,
+	"time":                segments.Time,
+	"node":                segments.Node,
+	"user":                segments.User,
+	"venv":                segments.VirtualEnv,
+	"vgo":                 segments.VirtualGo,
+	"vi-mode":             segments.ViMode,
+	"wsl":                 segments.WSL,
+	"nix-shell":           segments.NixShell,
 }
 
 func comments(lines ...string) string {
@@ -124,7 +68,7 @@ func commentsWithDefaults(lines ...string) string {
 func main() {
 	flag.Parse()
 
-	cfg := defaults
+	cfg := core.Defaults
 	err := cfg.Load()
 	if err != nil {
 		println("Error loading config")
@@ -134,95 +78,95 @@ func main() {
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "cwd-mode":
-			cfg.CwdMode = *args.CwdMode
+			cfg.CwdMode = *core.Args.CwdMode
 		case "cwd-max-depth":
-			cfg.CwdMaxDepth = *args.CwdMaxDepth
+			cfg.CwdMaxDepth = *core.Args.CwdMaxDepth
 		case "cwd-max-dir-size":
-			cfg.CwdMaxDirSize = *args.CwdMaxDirSize
+			cfg.CwdMaxDirSize = *core.Args.CwdMaxDirSize
 		case "colorize-hostname":
-			cfg.ColorizeHostname = *args.ColorizeHostname
+			cfg.ColorizeHostname = *core.Args.ColorizeHostname
 		case "hostname-only-if-ssh":
-			cfg.HostnameOnlyIfSSH = *args.HostnameOnlyIfSSH
+			cfg.HostnameOnlyIfSSH = *core.Args.HostnameOnlyIfSSH
 		case "alternate-ssh-icon":
-			cfg.SshAlternateIcon = *args.SshAlternateIcon
+			cfg.SshAlternateIcon = *core.Args.SshAlternateIcon
 		case "east-asian-width":
-			cfg.EastAsianWidth = *args.EastAsianWidth
+			cfg.EastAsianWidth = *core.Args.EastAsianWidth
 		case "newline":
-			cfg.PromptOnNewLine = *args.PromptOnNewLine
+			cfg.PromptOnNewLine = *core.Args.PromptOnNewLine
 		case "static-prompt-indicator":
-			cfg.StaticPromptIndicator = *args.StaticPromptIndicator
+			cfg.StaticPromptIndicator = *core.Args.StaticPromptIndicator
 		case "venv-name-size-limit":
-			cfg.VenvNameSizeLimit = *args.VenvNameSizeLimit
+			cfg.VenvNameSizeLimit = *core.Args.VenvNameSizeLimit
 		case "jobs":
-			cfg.Jobs = *args.Jobs
+			cfg.Jobs = *core.Args.Jobs
 		case "git-assume-unchanged-size":
-			cfg.GitAssumeUnchangedSize = *args.GitAssumeUnchangedSize
+			cfg.GitAssumeUnchangedSize = *core.Args.GitAssumeUnchangedSize
 		case "git-disable-stats":
-			cfg.GitDisableStats = strings.Split(*args.GitDisableStats, ",")
+			cfg.GitDisableStats = strings.Split(*core.Args.GitDisableStats, ",")
 		case "git-mode":
-			cfg.GitMode = *args.GitMode
+			cfg.GitMode = *core.Args.GitMode
 		case "mode":
-			cfg.Mode = *args.Mode
+			cfg.Mode = *core.Args.Mode
 		case "theme":
-			cfg.Theme = *args.Theme
+			cfg.Theme = *core.Args.Theme
 		case "shell":
-			cfg.Shell = *args.Shell
+			cfg.Shell = *core.Args.Shell
 		case "modules":
-			cfg.Modules = strings.Split(*args.Modules, ",")
+			cfg.Modules = strings.Split(*core.Args.Modules, ",")
 		case "modules-right":
-			cfg.ModulesRight = strings.Split(*args.ModulesRight, ",")
+			cfg.ModulesRight = strings.Split(*core.Args.ModulesRight, ",")
 		case "priority":
-			cfg.Priority = strings.Split(*args.Priority, ",")
+			cfg.Priority = strings.Split(*core.Args.Priority, ",")
 		case "max-width":
-			cfg.MaxWidthPercentage = *args.MaxWidthPercentage
-		case "truncate-segment-width":
-			cfg.TruncateSegmentWidth = *args.TruncateSegmentWidth
+			cfg.MaxWidthPercentage = *core.Args.MaxWidthPercentage
+		case "truncate-segments-width":
+			cfg.TruncateSegmentWidth = *core.Args.TruncateSegmentWidth
 		case "error":
-			cfg.PrevError = *args.PrevError
+			cfg.PrevError = *core.Args.PrevError
 		case "numeric-exit-codes":
-			cfg.NumericExitCodes = *args.NumericExitCodes
+			cfg.NumericExitCodes = *core.Args.NumericExitCodes
 		case "ignore-repos":
-			cfg.IgnoreRepos = strings.Split(*args.IgnoreRepos, ",")
+			cfg.IgnoreRepos = strings.Split(*core.Args.IgnoreRepos, ",")
 		case "shorten-gke-names":
-			cfg.ShortenGKENames = *args.ShortenGKENames
+			cfg.ShortenGKENames = *core.Args.ShortenGKENames
 		case "shorten-eks-names":
-			cfg.ShortenEKSNames = *args.ShortenEKSNames
+			cfg.ShortenEKSNames = *core.Args.ShortenEKSNames
 		case "shorten-openshift-names":
-			cfg.ShortenOpenshiftNames = *args.ShortenOpenshiftNames
+			cfg.ShortenOpenshiftNames = *core.Args.ShortenOpenshiftNames
 		case "shell-var":
-			cfg.ShellVar = *args.ShellVar
+			cfg.ShellVar = *core.Args.ShellVar
 		case "shell-var-no-warn-empty":
-			cfg.ShellVarNoWarnEmpty = *args.ShellVarNoWarnEmpty
+			cfg.ShellVarNoWarnEmpty = *core.Args.ShellVarNoWarnEmpty
 		case "trim-ad-domain":
-			cfg.TrimADDomain = *args.TrimADDomain
+			cfg.TrimADDomain = *core.Args.TrimADDomain
 		case "path-aliases":
-			for _, pair := range strings.Split(*args.PathAliases, ",") {
+			for _, pair := range strings.Split(*core.Args.PathAliases, ",") {
 				kv := strings.SplitN(pair, "=", 2)
 				cfg.PathAliases[kv[0]] = kv[1]
 			}
 		case "duration":
-			cfg.Duration = *args.Duration
+			cfg.Duration = *core.Args.Duration
 		case "duration-min":
-			cfg.DurationMin = *args.DurationMin
+			cfg.DurationMin = *core.Args.DurationMin
 		case "duration-low-precision":
-			cfg.DurationLowPrecision = *args.DurationLowPrecision
+			cfg.DurationLowPrecision = *core.Args.DurationLowPrecision
 		case "eval":
-			cfg.Eval = *args.Eval
+			cfg.Eval = *core.Args.Eval
 		case "condensed":
-			cfg.Condensed = *args.Condensed
+			cfg.Condensed = *core.Args.Condensed
 		case "ignore-warnings":
-			cfg.IgnoreWarnings = *args.IgnoreWarnings
+			cfg.IgnoreWarnings = *core.Args.IgnoreWarnings
 		case "time":
-			cfg.Time = *args.Time
+			cfg.Time = *core.Args.Time
 		case "vi-mode":
-			cfg.ViMode = *args.ViMode
+			cfg.ViMode = *core.Args.ViMode
 		}
 	})
 
 	if strings.HasSuffix(cfg.Theme, ".json") {
-		file, err := ioutil.ReadFile(cfg.Theme)
+		file, err := os.ReadFile(cfg.Theme)
 		if err == nil {
-			theme := cfg.Themes[defaults.Theme]
+			theme := cfg.Themes[core.Defaults.Theme]
 			err = json.Unmarshal(file, &theme)
 			if err == nil {
 				cfg.Themes[cfg.Theme] = theme
@@ -234,9 +178,9 @@ func main() {
 	}
 
 	if strings.HasSuffix(cfg.Mode, ".json") {
-		file, err := ioutil.ReadFile(cfg.Mode)
+		file, err := os.ReadFile(cfg.Mode)
 		if err == nil {
-			symbols := cfg.Modes[defaults.Mode]
+			symbols := cfg.Modes[core.Defaults.Mode]
 			err = json.Unmarshal(file, &symbols)
 			if err == nil {
 				cfg.Modes[cfg.Mode] = symbols
@@ -247,10 +191,10 @@ func main() {
 		}
 	}
 
-	p := newPowerline(cfg, getValidCwd(), alignLeft)
-	if p.supportsRightModules() && p.hasRightModules() && !cfg.Eval {
+	p := core.NewPowerline(cfg, helpers.GetValidCwd(), constants.AlignLeft)
+	if p.SupportsRightModules() && p.HasRightModules() && !cfg.Eval {
 		panic("Flag '-modules-right' requires '-eval' mode.")
 	}
 
-	fmt.Print(p.draw())
+	fmt.Print(p.Draw())
 }
